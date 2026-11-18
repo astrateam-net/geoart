@@ -1,8 +1,8 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-# The containers repo's app-builder for one app, called by build.yaml: the image is built from the
-# assembled tree, so every build job applies the series and overlay first. Without `release` it
-# builds and runs tests.yaml; with it, it pushes ghcr.io/<owner>/geoart and attests it.
+# Called by build.yaml. The image is built from the assembled tree, so every build job applies the
+# series and overlay first. Without `release` it builds and runs tests.yaml; with it, it pushes
+# ghcr.io/<owner>/geoart and attests it.
 name: Image
 
 on:
@@ -36,8 +36,8 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      # Version from the submodule plus our slot, as orca-server does; the containers repo reads a
-      # bake default instead. A release never overwrites a published tag: bump `patch`.
+      # Version from the submodule plus our slot. A release never overwrites a published tag: bump
+      # `patch`.
       - name: Application Options
         id: options
         env:
@@ -111,8 +111,7 @@ jobs:
       - name: Assemble Build Context
         run: mise run build:context
 
-      # Cache per arch; push by digest only on release, as the containers repo does. The cache is
-      # geoart's own package: the containers repo's build_cache grants no write to other repos.
+      # Cache per arch in geoart's own package; push by digest only on release.
       - name: Get Bake Options
         id: target
         env:

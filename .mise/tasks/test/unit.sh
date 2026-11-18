@@ -2,7 +2,7 @@
 #MISE description="Tests the series and the overlay carry: their Go packages and vitest files"
 #MISE dir="{{config_root}}"
 #MISE depends=["up"]
-# Scoped like orca-server's test:unit: upstream's whole suite needs cloud credentials.
+# Scoped to what the series and overlay touch: upstream's whole suite needs cloud credentials.
 set -Eeuo pipefail
 
 # Inherited git env would point `git -C` at the outer repo — see .mise/lib.sh.
