@@ -97,44 +97,44 @@ url_api = "https://api.github.com/repos/grafana/flint/releases/assets/685577805"
 provenance = "github-attestations"
 
 [[tools."aqua:owenlamont/ryl"]]
-version = "0.21.0"
+version = "0.30.0"
 backend = "aqua:owenlamont/ryl"
-specifiers = ["0.21.0"]
+specifiers = ["0.30.0"]
 
 [tools."aqua:owenlamont/ryl"."platforms.linux-arm64"]
-checksum = "sha256:f51e12de3c22c918070171524019a396b0c2b0eb7ff01c9b5849d8bb3cd7ab19"
-url = "https://github.com/owenlamont/ryl/releases/download/v0.21.0/ryl-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/454375978"
+checksum = "sha256:2e4a765434d63986c858678df0573349da44abc162b7b698a4395e5b586a1e10"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.30.0/ryl-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/757823621"
 provenance = "github-attestations"
 
 [tools."aqua:owenlamont/ryl"."platforms.linux-arm64-musl"]
-checksum = "sha256:134dfccd5dd7fd13092dbaf482e14e1e9c2b238ecf4306ac020b036212f85abc"
-url = "https://github.com/owenlamont/ryl/releases/download/v0.21.0/ryl-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/454375977"
+checksum = "sha256:c13e61723f464e1c0fb3ccef010817d7813f96002cd411a8e797ea3cb840a60d"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.30.0/ryl-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/757823624"
 provenance = "github-attestations"
 
 [tools."aqua:owenlamont/ryl"."platforms.linux-x64"]
-checksum = "sha256:c69cb15714591355f549bdde2121af028f12f5e37fbb12d0a4e8ee15da85aa1b"
-url = "https://github.com/owenlamont/ryl/releases/download/v0.21.0/ryl-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/454375992"
+checksum = "sha256:37ee3c236005117886949cb413b467a9f4ec06072e2233a1727222b06e54ea3e"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.30.0/ryl-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/757823693"
 provenance = "github-attestations"
 
 [tools."aqua:owenlamont/ryl"."platforms.linux-x64-musl"]
-checksum = "sha256:36867148c4e7415b5f8dd24a1c4e3212e8ec016a6a16d1d1e0d16d7c2f641214"
-url = "https://github.com/owenlamont/ryl/releases/download/v0.21.0/ryl-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/454375995"
+checksum = "sha256:998a0fcad96bed7a410f82641b74febfe14f29866b16fb31497f679a3bb311dc"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.30.0/ryl-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/757823698"
 provenance = "github-attestations"
 
 [tools."aqua:owenlamont/ryl"."platforms.macos-arm64"]
-checksum = "sha256:ed5e23a5634f138aac5c2c15e72975f0f485f694582ef6874625e38460b0c3b4"
-url = "https://github.com/owenlamont/ryl/releases/download/v0.21.0/ryl-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/454375976"
+checksum = "sha256:d3d0010227870a6e4b2764eb26cff52efe0570508f2c52369d17eae3889575eb"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.30.0/ryl-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/757823626"
 provenance = "github-attestations"
 
 [tools."aqua:owenlamont/ryl"."platforms.windows-x64"]
-checksum = "sha256:7522a1fde12775ad43b74e154a6abe3affb676bb52d719ac9e7eb6980bda856d"
-url = "https://github.com/owenlamont/ryl/releases/download/v0.21.0/ryl-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/454375990"
+checksum = "sha256:4debe78d5945908c2d561230e3b60c2a960ea153e1d9684a4ecec5a8608d96c9"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.30.0/ryl-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/757823676"
 provenance = "github-attestations"
 
 [[tools.bats]]
