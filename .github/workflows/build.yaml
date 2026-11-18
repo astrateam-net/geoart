@@ -7,7 +7,7 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-  # Releases are deliberate, as in orca-server: dispatch with the next patch to publish 27.0.N.
+  # Releases are deliberate: dispatch with the next patch to publish 27.0.N.
   workflow_dispatch:
     inputs:
       patch:
@@ -134,8 +134,8 @@ jobs:
         run: mise exec -- npm ci --no-audit --no-fund
       - run: mise run test:unit
 
-  # Two callers, as the containers repo has: pull requests and main build and test with read
-  # access only; a dispatch publishes with write access.
+  # Pull requests and main build and test with read access only; a dispatch publishes with write
+  # access.
   image:
     name: Image
     needs: [changes, series]
