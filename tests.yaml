@@ -1,0 +1,29 @@
+---
+schemaVersion: "2.0.0"
+
+# Structural: the image carries the OIDC login build, not stock Dekart. The flow itself
+# needs Postgres and a provider, so it is covered by the Go tests and a deploy check.
+fileExistenceTests:
+  - name: server binary
+    path: /dekart/server
+    shouldExist: true
+  - name: Postgres migration for OIDC sessions
+    path: /dekart/migrations/000057_create_oidc_sessions.up.sql
+    shouldExist: true
+  - name: SQLite migration for OIDC sessions
+    path: /dekart/sqlite/migrations/000056_create_oidc_sessions.up.sql
+    shouldExist: true
+
+commandTests:
+  - name: server serves the OIDC callback route
+    command: grep
+    args: ["-q", "/api/v1/oidc/callback", "/dekart/server"]
+    exitCode: 0
+  - name: UI bundle redirects to the OIDC login
+    command: sh
+    args: ["-c", "grep -lq 'api/v1/oidc/login' /dekart/build/*.js"]
+    exitCode: 0
+
+metadataTest:
+  user: appuser
+  exposedPorts: ["8080"]

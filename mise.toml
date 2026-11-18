@@ -9,6 +9,7 @@ lockfile = true
 # activated by its mise registry SHORT name.
 [tools]
 bats = "1.14.0"
+container-structure-test = "1.22.1"
 # Upstream's toolchain: go.mod and the Dockerfile's node stage.
 go = "1.25.0"
 hk = "1.53.0"
@@ -20,6 +21,7 @@ pkl = "0.32.1"
 actionlint = "1.7.12"
 "aqua:grafana/flint" = "0.22.9"
 "aqua:owenlamont/ryl" = "0.21.0"
+biome = "2.6.4"
 hadolint = "2.14.0"
 rumdl = "0.2.43"
 shellcheck = "0.11.0"
@@ -51,3 +53,8 @@ depends = ["lint"]
 description = "Everything that gates a push"
 # test:series mutates the tree the other gates read, so it runs alone first.
 run = ["mise run test:series", "mise run up", "mise run check:gates"]
+
+[tasks.ci]
+description = "The full local pipeline: gates, then the image"
+depends = ["check"]
+run = "mise run build"

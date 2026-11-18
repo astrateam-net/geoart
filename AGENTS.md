@@ -27,6 +27,8 @@ The order is always `quilt push -a` → `mise run overlay` → build or test; `m
 | Series integrity (10 checks) | `mise run test:series` |
 | Lint every file type | `mise run lint` |
 | Everything that gates a push | `mise run check` |
+| Build the image and run `tests.yaml` | `mise run build` — tags `geoart:<version>` |
+| That, after every gate | `mise run ci` |
 
 quilt is a system package (`pacman -S quilt`), not a mise tool. Never run `quilt` outside `mise`:
 `.quiltrc` reaches quilt only through the `QUILTRC` that mise exports.
@@ -60,6 +62,10 @@ Code in patches and overlay reads as if Vladi Bilonenko (`delfrrr`, author of ev
 - Tests: same package, testify `require`, `t.Setenv`, one table test per mode modelled on
   `TestGetContextAmazonOIDC`, `httptest` for IdP endpoints, no network.
 - Proto: append enum values, `make proto`, never hand-edit generated files.
+
+Overlay JS and JSON follow `biome.jsonc`, not upstream's StandardJS: geoart is our build, not a
+fork for pull requests. Overlay Go follows `gofmt`. Both run through flint in `mise run lint` and
+the pre-commit hook; `lib/` and `patches/` are excluded.
 
 Commits here are conventional (`feat: …`, lowercase imperative, about 60 characters), enforced by hk.
 

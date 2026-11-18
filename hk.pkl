@@ -49,6 +49,14 @@ hooks {
         glob = List("**/*.toml")
         fix = "flint run --fix --allow-fixed taplo"
       }
+      ["biome"] = new Step {
+        glob = List("**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.json", "**/*.jsonc")
+        fix = "flint run --fix --allow-fixed biome biome-format"
+      }
+      ["gofmt"] = new Step {
+        glob = List("**/*.go")
+        fix = "flint run --fix --allow-fixed gofmt"
+      }
       ["actionlint"] = new Step {
         glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
         check = "flint run actionlint"
