@@ -13,15 +13,13 @@ group "default" {
   targets = ["image-local"]
 }
 
-// Upstream's own Dockerfile on the assembled tree: `mise run up` first, so the series and
-// overlay are in lib/dekart before the context is sent.
+// Upstream's own Dockerfile on the assembled tree: `mise run build:context` first, so the series
+// and overlay are in lib/dekart before the context is sent. CI sets the other OCI labels.
 target "image" {
   inherits = ["docker-metadata-action"]
   context  = "lib/dekart"
   labels = {
-    "org.opencontainers.image.source"  = "${SOURCE}"
-    "org.opencontainers.image.version" = "${VERSION}"
-    "org.opencontainers.image.title"   = "geoart"
+    "org.opencontainers.image.source" = "${SOURCE}"
   }
 }
 

@@ -2,7 +2,7 @@
 #MISE alias="build"
 #MISE description="Build the image of the assembled tree and run its structure tests"
 #MISE dir="{{config_root}}"
-#MISE depends=["up"]
+#MISE depends=["build:context"]
 set -Eeuo pipefail
 
 # shellcheck source=../../lib.sh
@@ -12,10 +12,6 @@ main() {
   VERSION="$(geoart_version "${PATCH:-0}")"
   export VERSION
   echo "geoart ${VERSION} (Dekart $(dekart_version))"
-
-  # Upstream's Dockerfile copies .npmrc, which its CI writes with a GitHub Packages token. The
-  # pinned lockfile resolves from registry.npmjs.org only, so an empty file is enough.
-  [ -e lib/dekart/.npmrc ] || : > lib/dekart/.npmrc
 
   mkdir -p .cache
   docker buildx bake --metadata-file .cache/docker-bake.json image-local
