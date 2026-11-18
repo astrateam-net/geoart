@@ -125,7 +125,8 @@ jobs:
     name: Image
     needs: [changes, series]
     if: needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
-    uses: ./.github/workflows/image.yaml
+    # `$/` is what zizmor's self-repository audit asks for, but actionlint 1.7.12 rejects it.
+    uses: ./.github/workflows/image.yaml # zizmor: ignore[self-repository]
     permissions:
       contents: read
       packages: read

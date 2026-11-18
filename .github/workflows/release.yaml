@@ -80,7 +80,8 @@ jobs:
   image:
     name: Image
     needs: check
-    uses: ./.github/workflows/image.yaml
+    # `$/` is what zizmor's self-repository audit asks for, but actionlint 1.7.12 rejects it.
+    uses: ./.github/workflows/image.yaml # zizmor: ignore[self-repository]
     permissions:
       attestations: write
       contents: write
