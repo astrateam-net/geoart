@@ -31,7 +31,8 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      # Version comes from the submodule, not from a bake default as in the containers repo.
+      # The upstream version we patch, read from the submodule: the containers repo reads it from
+      # a bake default instead.
       - name: Application Options
         id: options
         env:
@@ -40,7 +41,7 @@ jobs:
           source .mise/lib.sh
           PLATFORMS=$(docker buildx bake image-all --print --progress=quiet | jq --raw-output --compact-output '.target."image-all".platforms')
           {
-            echo "version=$(geoart_version)"
+            echo "version=$(dekart_version)"
             echo "platforms=${PLATFORMS}"
             echo "release=${RELEASE}"
           } >> "$GITHUB_OUTPUT"

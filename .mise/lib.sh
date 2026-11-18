@@ -17,15 +17,6 @@ dekart_version() {
   jq -r .version lib/dekart/package.json
 }
 
-# Dekart 0.27.0 releases as 27.0.0; the last slot is ours ($1).
-# Not `git describe`: actions/checkout fetches submodules shallow and untagged.
-geoart_version() {
-  local version patch
-  version="$(dekart_version)"
-  patch="${1:-0}"
-  echo "${version#*.}.${patch}"
-}
-
 # Upstream's toolchain, read from what its own build uses.
 dekart_go_version() {
   sed -n 's/^go //p' lib/dekart/go.mod

@@ -9,9 +9,10 @@ set -Eeuo pipefail
 source .mise/lib.sh
 
 main() {
-  VERSION="$(geoart_version "${PATCH:-0}")"
+  # The tag is the upstream version we patch, as the containers repo tags its images.
+  VERSION="$(dekart_version)"
   export VERSION
-  echo "geoart ${VERSION} (Dekart $(dekart_version))"
+  echo "geoart ${VERSION}"
 
   mkdir -p .cache
   docker buildx bake --metadata-file .cache/docker-bake.json image-local

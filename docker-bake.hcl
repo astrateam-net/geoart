@@ -1,6 +1,6 @@
 target "docker-metadata-action" {}
 
-// Ours, never a default: `geoart_version` in .mise/lib.sh derives it from the submodule.
+// The upstream version we patch, never a default: `dekart_version` in .mise/lib.sh reads the submodule.
 variable "VERSION" {
   default = ""
 }
