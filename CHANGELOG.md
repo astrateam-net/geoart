@@ -33,6 +33,15 @@ Dekart v0.99.9
 
 Dekart v0.27.0
 
+### Fixed
+
+- Sign out returns to Dekart: the ID token from login is kept with the session and sent as
+  `id_token_hint`, which the provider requires before it honours `post_logout_redirect_uri`.
+
+## [27.0.0] - 2026-11-18
+
+Dekart v0.27.0
+
 ### Added
 
 - `DEKART_REQUIRE_OIDC_LOGIN`: Dekart signs users in with any OIDC provider itself (authorization

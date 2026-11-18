@@ -329,7 +329,7 @@ func (c ClaimsCheck) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) 
 	if idpExpiresAt.IsZero() {
 		idpExpiresAt = c.oidcLogin.sessions.now().Add(oidcFallbackTokenLifetime)
 	}
-	value, _, err := c.oidcLogin.sessions.create(ctx, identity.email, identity.subject, token.RefreshToken, idpExpiresAt)
+	value, _, err := c.oidcLogin.sessions.create(ctx, identity.email, identity.subject, token.RefreshToken, rawIDToken, idpExpiresAt)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create OIDC session")
 		http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -342,7 +342,14 @@ func (c ClaimsCheck) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) 
 
 // HandleOIDCLogout ends the session and returns the provider logout URL when it has one.
 func (c ClaimsCheck) HandleOIDCLogout(w http.ResponseWriter, r *http.Request) {
+	idToken := ""
 	if cookie, err := r.Cookie(oidcSessionCookieName); err == nil && cookie.Value != "" {
+		// Read before delete: the ID token is the id_token_hint the provider logout needs.
+		if session, err := c.oidcLogin.sessions.get(r.Context(), cookie.Value); err != nil {
+			log.Warn().Err(err).Msg("OIDC session lookup failed during logout")
+		} else if session != nil {
+			idToken = session.IDToken
+		}
 		if err := c.oidcLogin.sessions.delete(r.Context(), hashOIDCSessionToken(cookie.Value)); err != nil {
 			log.Error().Err(err).Msg("Failed to delete OIDC session")
 			http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -357,7 +364,12 @@ func (c ClaimsCheck) HandleOIDCLogout(w http.ResponseWriter, r *http.Request) {
 	if discovery, _, err := c.oidcLogin.metadata(); err == nil && discovery.EndSessionEndpoint != "" {
 		values := url.Values{}
 		values.Set("client_id", c.oidcLogin.clientID)
-		values.Set("post_logout_redirect_uri", deviceauth.RequestBaseURL(nil)+"/")
+		// The provider rejects post_logout_redirect_uri without id_token_hint, so a session that
+		// predates stored ID tokens logs out at the provider and stays there.
+		if idToken != "" {
+			values.Set("id_token_hint", idToken)
+			values.Set("post_logout_redirect_uri", deviceauth.RequestBaseURL(nil)+"/")
+		}
 		response.LogoutURL = discovery.EndSessionEndpoint + "?" + values.Encode()
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -471,7 +483,12 @@ func (l *oidcLogin) refresh(ctx context.Context, session *oidcSession) bool {
 		if idpExpiresAt.IsZero() {
 			idpExpiresAt = l.sessions.now().Add(oidcFallbackTokenLifetime)
 		}
-		return nil, l.sessions.updateTokens(refreshCtx, session.ID, token.RefreshToken, idpExpiresAt)
+		// A refresh may omit the ID token; the one from login still serves as id_token_hint.
+		idToken, _ := token.Extra("id_token").(string)
+		if idToken == "" {
+			idToken = session.IDToken
+		}
+		return nil, l.sessions.updateTokens(refreshCtx, session.ID, token.RefreshToken, idToken, idpExpiresAt)
 	})
 	if err == nil {
 		return true

@@ -130,10 +130,12 @@ func newOIDCLoginCheck(t *testing.T, provider *fakeOIDCProvider) (ClaimsCheck, *
 	// One connection: every :memory: connection is a separate database.
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	migration, err := os.ReadFile(filepath.Join("..", "..", "..", "sqlite", "migrations", "000056_create_oidc_sessions.up.sql"))
-	require.NoError(t, err)
-	_, err = db.Exec(string(migration))
-	require.NoError(t, err)
+	for _, name := range []string{"000056_create_oidc_sessions.up.sql", "000057_oidc_sessions_id_token.up.sql"} {
+		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "sqlite", "migrations", name))
+		require.NoError(t, err)
+		_, err = db.Exec(string(migration))
+		require.NoError(t, err)
+	}
 	_, err = db.Exec(`CREATE TABLE users (email TEXT PRIMARY KEY, sensitive_scope TEXT DEFAULT '',
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`)
 	require.NoError(t, err)
@@ -226,6 +228,9 @@ func TestOIDCLoginFlow(t *testing.T) {
 	plaintext, err := check.oidcLogin.sessions.decrypt(stored)
 	require.NoError(t, err)
 	require.Equal(t, "refresh-1", plaintext)
+	loggedIn, err := check.oidcLogin.sessions.get(context.Background(), session.Value)
+	require.NoError(t, err)
+	require.Contains(t, loggedIn.IDToken, ".", "the ID token from login is kept for id_token_hint")
 }
 
 func TestOIDCCallbackRejects(t *testing.T) {
@@ -329,7 +334,7 @@ func TestGetContextOIDCLogin(t *testing.T) {
 			if scenario.idpExpired {
 				idpExpiresAt = time.Now().Add(-time.Minute)
 			}
-			value, _, err := check.oidcLogin.sessions.create(context.Background(), "oidc@example.com", "user-1", scenario.refreshToken, idpExpiresAt)
+			value, _, err := check.oidcLogin.sessions.create(context.Background(), "oidc@example.com", "user-1", scenario.refreshToken, "id-token-1", idpExpiresAt)
 			require.NoError(t, err)
 			if scenario.setup != nil {
 				scenario.setup(t, check, db)
@@ -357,6 +362,7 @@ func TestGetContextOIDCLogin(t *testing.T) {
 				session, err := check.oidcLogin.sessions.get(context.Background(), value)
 				require.NoError(t, err)
 				require.Equal(t, "refresh-2", session.RefreshToken)
+				require.Equal(t, "id-token-1", session.IDToken)
 				require.True(t, session.IDPExpiresAt.After(time.Now()))
 			}
 		})
@@ -394,7 +400,7 @@ func TestOIDCSessionTouchSlidesExpiry(t *testing.T) {
 	provider := newFakeOIDCProvider(t)
 	check, db := newOIDCLoginCheck(t, provider)
 	store := check.oidcLogin.sessions
-	value, firstExpiry, err := store.create(context.Background(), "oidc@example.com", "user-1", "", time.Now().Add(time.Hour))
+	value, firstExpiry, err := store.create(context.Background(), "oidc@example.com", "user-1", "", "", time.Now().Add(time.Hour))
 	require.NoError(t, err)
 	readExpiry := func() time.Time {
 		var expiresAt time.Time
@@ -414,28 +420,45 @@ func TestOIDCSessionTouchSlidesExpiry(t *testing.T) {
 }
 
 func TestHandleOIDCLogout(t *testing.T) {
-	provider := newFakeOIDCProvider(t)
-	check, db := newOIDCLoginCheck(t, provider)
-	value, _, err := check.oidcLogin.sessions.create(context.Background(), "oidc@example.com", "user-1", "refresh-1", time.Now().Add(time.Hour))
-	require.NoError(t, err)
+	for _, scenario := range []struct {
+		name, idToken string
+		redirect      bool
+	}{
+		{name: "with ID token", idToken: "id-token-1", redirect: true},
+		{name: "session without ID token", idToken: ""},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			provider := newFakeOIDCProvider(t)
+			check, db := newOIDCLoginCheck(t, provider)
+			value, _, err := check.oidcLogin.sessions.create(context.Background(), "oidc@example.com", "user-1", "refresh-1", scenario.idToken, time.Now().Add(time.Hour))
+			require.NoError(t, err)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/oidc/logout", nil)
-	request.AddCookie(&http.Cookie{Name: oidcSessionCookieName, Value: value})
-	recorder := httptest.NewRecorder()
-	check.HandleOIDCLogout(recorder, request)
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/oidc/logout", nil)
+			request.AddCookie(&http.Cookie{Name: oidcSessionCookieName, Value: value})
+			recorder := httptest.NewRecorder()
+			check.HandleOIDCLogout(recorder, request)
 
-	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, 0, countOIDCSessions(t, db))
-	cleared := findCookie(recorder.Result().Cookies(), oidcSessionCookieName)
-	require.NotNil(t, cleared)
-	require.Less(t, cleared.MaxAge, 0)
-	var response struct {
-		LogoutURL string `json:"logoutUrl"`
+			require.Equal(t, http.StatusOK, recorder.Code)
+			require.Equal(t, 0, countOIDCSessions(t, db))
+			cleared := findCookie(recorder.Result().Cookies(), oidcSessionCookieName)
+			require.NotNil(t, cleared)
+			require.Less(t, cleared.MaxAge, 0)
+			var response struct {
+				LogoutURL string `json:"logoutUrl"`
+			}
+			require.NoError(t, json.NewDecoder(recorder.Body).Decode(&response))
+			logout, err := url.Parse(response.LogoutURL)
+			require.NoError(t, err)
+			require.Equal(t, "/logout", logout.Path)
+			require.Equal(t, "dekart", logout.Query().Get("client_id"))
+			// The provider rejects post_logout_redirect_uri without id_token_hint.
+			if scenario.redirect {
+				require.Equal(t, "id-token-1", logout.Query().Get("id_token_hint"))
+				require.Equal(t, "https://dekart.example/", logout.Query().Get("post_logout_redirect_uri"))
+			} else {
+				require.Empty(t, logout.Query().Get("id_token_hint"))
+				require.Empty(t, logout.Query().Get("post_logout_redirect_uri"))
+			}
+		})
 	}
-	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&response))
-	logout, err := url.Parse(response.LogoutURL)
-	require.NoError(t, err)
-	require.Equal(t, "/logout", logout.Path)
-	require.Equal(t, "dekart", logout.Query().Get("client_id"))
-	require.Equal(t, "https://dekart.example/", logout.Query().Get("post_logout_redirect_uri"))
 }

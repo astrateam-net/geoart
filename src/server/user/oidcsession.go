@@ -28,6 +28,7 @@ type oidcSession struct {
 	Email        string
 	Subject      string
 	RefreshToken string
+	IDToken      string
 	IDPExpiresAt time.Time
 	CreatedAt    time.Time
 	LastUsedAt   time.Time
@@ -108,16 +109,24 @@ func (s *oidcSessionStore) decrypt(value string) (string, error) {
 	return string(plaintext), nil
 }
 
-// encryptNullable keeps a missing refresh token as NULL instead of encrypting an empty string.
-func (s *oidcSessionStore) encryptNullable(refreshToken string) (sql.NullString, error) {
-	if refreshToken == "" {
+// encryptNullable keeps a missing token as NULL instead of encrypting an empty string.
+func (s *oidcSessionStore) encryptNullable(token string) (sql.NullString, error) {
+	if token == "" {
 		return sql.NullString{}, nil
 	}
-	encrypted, err := s.encrypt(refreshToken)
+	encrypted, err := s.encrypt(token)
 	if err != nil {
 		return sql.NullString{}, err
 	}
 	return sql.NullString{String: encrypted, Valid: true}, nil
+}
+
+// decryptNullable opens a value written by encryptNullable; NULL reads back as an empty string.
+func (s *oidcSessionStore) decryptNullable(value sql.NullString) (string, error) {
+	if !value.Valid {
+		return "", nil
+	}
+	return s.decrypt(value.String)
 }
 
 // idleExpiry slides the idle timeout without passing the absolute lifetime.
@@ -130,7 +139,7 @@ func idleExpiry(now, createdAt time.Time) time.Time {
 }
 
 // create inserts a session and returns the raw cookie value with its expiry.
-func (s *oidcSessionStore) create(ctx context.Context, email, subject, refreshToken string, idpExpiresAt time.Time) (string, time.Time, error) {
+func (s *oidcSessionStore) create(ctx context.Context, email, subject, refreshToken, idToken string, idpExpiresAt time.Time) (string, time.Time, error) {
 	token, err := randomURLToken()
 	if err != nil {
 		return "", time.Time{}, err
@@ -139,13 +148,17 @@ func (s *oidcSessionStore) create(ctx context.Context, email, subject, refreshTo
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	encryptedIDToken, err := s.encryptNullable(idToken)
+	if err != nil {
+		return "", time.Time{}, err
+	}
 	now := s.now()
 	expiresAt := idleExpiry(now, now)
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO oidc_sessions (id, email, subject, refresh_token, idp_expires_at, created_at, last_used_at, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		hashOIDCSessionToken(token), email, subject, encrypted, idpExpiresAt.UTC(), now, now, expiresAt,
+		`INSERT INTO oidc_sessions (id, email, subject, refresh_token, id_token, idp_expires_at, created_at, last_used_at, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		hashOIDCSessionToken(token), email, subject, encrypted, encryptedIDToken, idpExpiresAt.UTC(), now, now, expiresAt,
 	)
 	if err != nil {
 		return "", time.Time{}, err
@@ -156,13 +169,13 @@ func (s *oidcSessionStore) create(ctx context.Context, email, subject, refreshTo
 // get returns the live session for a cookie value, or nil when it is unknown or expired.
 func (s *oidcSessionStore) get(ctx context.Context, token string) (*oidcSession, error) {
 	session := &oidcSession{ID: hashOIDCSessionToken(token)}
-	var refreshToken sql.NullString
+	var refreshToken, idToken sql.NullString
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT email, subject, refresh_token, idp_expires_at, created_at, last_used_at, expires_at
+		`SELECT email, subject, refresh_token, id_token, idp_expires_at, created_at, last_used_at, expires_at
 		 FROM oidc_sessions WHERE id = $1`,
 		session.ID,
-	).Scan(&session.Email, &session.Subject, &refreshToken, &session.IDPExpiresAt, &session.CreatedAt, &session.LastUsedAt, &session.ExpiresAt)
+	).Scan(&session.Email, &session.Subject, &refreshToken, &idToken, &session.IDPExpiresAt, &session.CreatedAt, &session.LastUsedAt, &session.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -174,11 +187,11 @@ func (s *oidcSessionStore) get(ctx context.Context, token string) (*oidcSession,
 	if !now.Before(session.ExpiresAt) || !now.Before(session.CreatedAt.Add(oidcSessionMaxLifetime)) {
 		return nil, s.delete(ctx, session.ID)
 	}
-	if refreshToken.Valid {
-		session.RefreshToken, err = s.decrypt(refreshToken.String)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt refresh token: %w", err)
-		}
+	if session.RefreshToken, err = s.decryptNullable(refreshToken); err != nil {
+		return nil, fmt.Errorf("decrypt refresh token: %w", err)
+	}
+	if session.IDToken, err = s.decryptNullable(idToken); err != nil {
+		return nil, fmt.Errorf("decrypt id token: %w", err)
 	}
 	return session, nil
 }
@@ -197,16 +210,20 @@ func (s *oidcSessionStore) touch(ctx context.Context, session *oidcSession) erro
 	return err
 }
 
-// updateTokens stores the outcome of a refresh: the possibly rotated refresh token and its access token expiry.
-func (s *oidcSessionStore) updateTokens(ctx context.Context, id, refreshToken string, idpExpiresAt time.Time) error {
+// updateTokens stores the outcome of a refresh: the possibly rotated refresh and ID tokens and the access token expiry.
+func (s *oidcSessionStore) updateTokens(ctx context.Context, id, refreshToken, idToken string, idpExpiresAt time.Time) error {
 	encrypted, err := s.encryptNullable(refreshToken)
+	if err != nil {
+		return err
+	}
+	encryptedIDToken, err := s.encryptNullable(idToken)
 	if err != nil {
 		return err
 	}
 	_, err = s.db.ExecContext(
 		ctx,
-		"UPDATE oidc_sessions SET refresh_token = $1, idp_expires_at = $2 WHERE id = $3",
-		encrypted, idpExpiresAt.UTC(), id,
+		"UPDATE oidc_sessions SET refresh_token = $1, id_token = $2, idp_expires_at = $3 WHERE id = $4",
+		encrypted, encryptedIDToken, idpExpiresAt.UTC(), id,
 	)
 	return err
 }
