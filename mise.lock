@@ -213,6 +213,52 @@ url = "https://github.com/biomejs/biome/releases/download/%40biomejs/biome%402.6
 url_api = "https://api.github.com/repos/biomejs/biome/releases/assets/686749926"
 provenance = "github-attestations"
 
+[[tools.container-structure-test]]
+version = "1.22.1"
+backend = "aqua:GoogleContainerTools/container-structure-test"
+specifiers = ["1.22.1"]
+
+[tools.container-structure-test."platforms.linux-arm64"]
+checksum = "sha256:801826ed107222120eb6df8c143b7de752cfebbe3aebfeea576e7098486917c2"
+checksum_source = "mise-versions"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-linux-arm64"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508270"
+
+[tools.container-structure-test."platforms.linux-arm64-musl"]
+checksum = "sha256:801826ed107222120eb6df8c143b7de752cfebbe3aebfeea576e7098486917c2"
+checksum_source = "mise-versions"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-linux-arm64"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508270"
+
+[tools.container-structure-test."platforms.linux-x64"]
+checksum = "sha256:fa35e89512a8978585f76cf41397956d2e3a30c62c2ad3fb857b1597074d14ca"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-linux-amd64"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508272"
+
+[tools.container-structure-test."platforms.linux-x64-musl"]
+checksum = "sha256:fa35e89512a8978585f76cf41397956d2e3a30c62c2ad3fb857b1597074d14ca"
+checksum_source = "mise-versions"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-linux-amd64"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508272"
+
+[tools.container-structure-test."platforms.macos-arm64"]
+checksum = "sha256:ba00172029ecec3afda7fd93a5eee7cdaef710196df7103689da3386eba56b0a"
+checksum_source = "mise-versions"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-darwin-arm64"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508265"
+
+[tools.container-structure-test."platforms.macos-x64"]
+checksum = "sha256:1ca7265ed9061785a39cda83d5a8104c769bbf432dab40a269596ea6f1a13c45"
+checksum_source = "mise-versions"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-darwin-amd64"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508267"
+
+[tools.container-structure-test."platforms.windows-x64"]
+checksum = "sha256:91d30f3cea928024663b04de9e66ef4d0fc17b2e5d00fdee268b1fe5daac1260"
+checksum_source = "mise-versions"
+url = "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v1.22.1/container-structure-test-windows-amd64.exe"
+url_api = "https://api.github.com/repos/GoogleContainerTools/container-structure-test/releases/assets/329508264"
+
 [[tools.go]]
 version = "1.25.0"
 backend = "core:go"

@@ -27,6 +27,8 @@ The order is always `quilt push -a` → `mise run overlay` → build or test; `m
 | Series integrity (10 checks) | `mise run test:series` |
 | Lint every file type | `mise run lint` |
 | Everything that gates a push | `mise run check` |
+| Build the image and run `tests.yaml` | `mise run build` — tags `geoart:<version>` |
+| That, after every gate | `mise run ci` |
 
 quilt is a system package (`pacman -S quilt`), not a mise tool. Never run `quilt` outside `mise`:
 `.quiltrc` reaches quilt only through the `QUILTRC` that mise exports.
