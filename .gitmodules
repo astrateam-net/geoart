@@ -1,0 +1,3 @@
+[submodule "lib/dekart"]
+	path = lib/dekart
+	url = https://github.com/dekart-xyz/dekart
