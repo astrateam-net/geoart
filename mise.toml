@@ -12,22 +12,22 @@ bats = "1.14.0"
 container-structure-test = "1.22.1"
 # Upstream's toolchain: go.mod and the Dockerfile's node stage.
 go = "1.25.0"
-hk = "1.53.0"
+hk = "2.13.0"
 jq = "1.8.2"
 node = "18.20.8"
-pkl = "0.32.1"
+pkl = "0.33.0"
 
 # Linters
 actionlint = "1.7.12"
 "aqua:grafana/flint" = "0.22.15"
-"aqua:owenlamont/ryl" = "0.21.0"
+"aqua:owenlamont/ryl" = "0.30.0"
 biome = "2.6.4"
-hadolint = "2.14.0"
-rumdl = "0.2.43"
+hadolint = "2.15.1"
+rumdl = "v0.3.4"
 shellcheck = "0.11.0"
-shfmt = "3.13.1"
+shfmt = "3.14.1"
 taplo = "0.10.0"
-zizmor = "1.28.0"
+zizmor = "1.32.0"
 
 [env]
 HK_MISE = 1 # run hk steps through `mise x`
