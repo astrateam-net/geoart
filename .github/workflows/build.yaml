@@ -7,14 +7,6 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-  # Releases are deliberate, as in orca-server: dispatch with the next patch to publish 27.0.N.
-  workflow_dispatch:
-    inputs:
-      patch:
-        type: string
-        description: Our release slot, the N in 27.0.N. Bump it to re-release the same Dekart version.
-        required: true
-        default: "0"
 
 permissions:
   contents: read
@@ -92,10 +84,7 @@ jobs:
     name: Patch series integrity
     runs-on: ubuntu-latest
     needs: changes
-    # A dispatch releases, and paths-filter sees no change on it, so it runs the gates anyway.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    if: needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -113,10 +102,7 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     needs: [changes, series]
-    # A dispatch releases, and paths-filter sees no change on it, so it runs the gates anyway.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    if: needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -134,41 +120,25 @@ jobs:
         run: mise exec -- npm ci --no-audit --no-fund
       - run: mise run test:unit
 
-  # Two callers, as the containers repo has: pull requests and main build and test with read
-  # access only; a dispatch publishes with write access.
+  # Builds and runs tests.yaml without publishing; release.yaml publishes.
   image:
     name: Image
     needs: [changes, series]
-    if: >-
-      github.event_name != 'workflow_dispatch' &&
-      (needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true')
-    uses: ./.github/workflows/image.yaml
+    if: needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    # `$/` is what zizmor's self-repository audit asks for, but actionlint 1.7.12 rejects it.
+    uses: ./.github/workflows/image.yaml # zizmor: ignore[self-repository]
     permissions:
       contents: read
       packages: read
     with:
       release: false
 
-  release:
-    name: Release
-    needs: [series, tests]
-    if: github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/image.yaml
-    permissions:
-      attestations: write
-      contents: write
-      id-token: write
-      packages: write
-    with:
-      release: true
-      patch: ${{ inputs.patch }}
-
   # The only required check. `changes` is in needs on purpose: without it, a failure there skips
   # the rest and skipped alone would read as green.
   gate:
     name: Gate
     runs-on: ubuntu-latest
-    needs: [changes, title, lint, series, tests, image, release]
+    needs: [changes, title, lint, series, tests, image]
     if: always()
     steps:
       - name: A job failed or was cancelled

@@ -30,7 +30,7 @@ The order is always `quilt push -a` → `mise run overlay` → build or test; `m
 | Everything that gates a push | `mise run check` |
 | Build the image and run `tests.yaml` | `mise run build [patch]` — tags `geoart:27.0.<patch>` |
 | That, after every gate | `mise run ci` |
-| Publish `ghcr.io/astrateam-net/geoart:27.0.N` | dispatch `Build` with `patch` = N; a published tag is never overwritten |
+| Publish `ghcr.io/astrateam-net/geoart:27.0.N` | dispatch `Draft release` with `version` and `patch` = N, then publish the draft; a published tag is never overwritten |
 
 quilt is a system package (`pacman -S quilt`), not a mise tool. Never run `quilt` outside `mise`:
 `.quiltrc` reaches quilt only through the `QUILTRC` that mise exports.
