@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS oidc_sessions (
     email TEXT NOT NULL,
     subject TEXT NOT NULL,             -- ID token `sub`
     refresh_token TEXT,                -- AES-256-GCM, base64; NULL when the provider issued none
+    id_token TEXT,                     -- AES-256-GCM; sent as id_token_hint on logout (migration 000058)
     idp_expires_at TIMESTAMP NOT NULL, -- expiry of the IdP access token from the last exchange
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -86,7 +87,8 @@ GET  /api/v1/oidc/callback?code=…&state=…
        (HttpOnly, Secure when DEKART_APP_URL is https, SameSite=Lax, Path=/)
      → 302 to the stored redirect path (relative paths only)
 POST /api/v1/oidc/logout
-     → delete the session row, clear the cookie, return the provider's end_session_endpoint if any
+     → delete the session row, clear the cookie, return the provider's end_session_endpoint with
+       id_token_hint and post_logout_redirect_uri (the provider requires both together)
 ```
 
 `ClaimsCheck.GetContext` in this mode, in order:
