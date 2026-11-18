@@ -3,13 +3,14 @@
 #MISE description="Build the image of the assembled tree and run its structure tests"
 #MISE dir="{{config_root}}"
 #MISE depends=["build:context"]
+#USAGE arg "[patch]" default="0" help="Our release slot: the N in 27.0.N"
 set -Eeuo pipefail
 
 # shellcheck source=../../lib.sh
 source .mise/lib.sh
 
 main() {
-  VERSION="$(geoart_version "${PATCH:-0}")"
+  VERSION="$(geoart_version "${usage_patch:-0}")"
   export VERSION
   echo "geoart ${VERSION} (Dekart $(dekart_version))"
 

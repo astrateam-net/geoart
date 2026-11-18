@@ -1,0 +1,176 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  # Releases are deliberate, as in orca-server: dispatch with the next patch to publish 27.0.N.
+  workflow_dispatch:
+    inputs:
+      patch:
+        type: string
+        description: Our release slot, the N in 27.0.N. Bump it to re-release the same Dekart version.
+        required: true
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    # A job block replaces the workflow's, so contents is repeated.
+    permissions:
+      contents: read # actions/checkout
+      pull-requests: read # paths-filter reads the PR file list over the API
+    outputs:
+      ci: ${{ steps.filter.outputs.ci }}
+      series: ${{ steps.filter.outputs.series }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        # No docs filter: the lint job below is deliberately unfiltered.
+        with:
+          filters: |
+            ci:
+              - ".github/workflows/**"
+              - ".mise/**"
+              - "mise.toml"
+              - "mise.lock"
+              - "test/**"
+            series:
+              - "lib/**"
+              - "patches/**"
+              - "src/**"
+              - "migrations/**"
+              - "sqlite/**"
+              - "docker-bake.hcl"
+              - "tests.yaml"
+
+  # Squash merges take the PR title as the commit subject, so it is the only message that reaches
+  # main and no git hook sees it. Same commit-msg hook hk.pkl runs locally.
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+      # The title is attacker-controlled: it reaches the shell as an env var, never as `${{ }}`.
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          printf '%s\n' "$TITLE" > "$RUNNER_TEMP/pr-title"
+          hk run commit-msg "$RUNNER_TEMP/pr-title"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    # No filter and no submodule: flint's scope is every tracked file, so any path list here would
+    # silently shrink it.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+      - run: mise run lint
+
+  series:
+    name: Patch series integrity
+    runs-on: ubuntu-latest
+    needs: changes
+    # A dispatch releases, and paths-filter sees no change on it, so it runs the gates anyway.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      # quilt is in neither the mise registry nor the pkgx pantry; apt is the only source for it.
+      - uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: quilt
+          version: 1.0
+      - uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+      - run: mise run test:series
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: [changes, series]
+    # A dispatch releases, and paths-filter sees no change on it, so it runs the gates anyway.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: quilt
+          version: 1.0
+      - uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+      # Before the install, so the lockfile resolves against the manifests the series produced.
+      - run: mise run up
+      - name: Install Dekart's client dependencies
+        working-directory: lib/dekart
+        run: mise exec -- npm ci --no-audit --no-fund
+      - run: mise run test:unit
+
+  # Two callers, as the containers repo has: pull requests and main build and test with read
+  # access only; a dispatch publishes with write access.
+  image:
+    name: Image
+    needs: [changes, series]
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      (needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true')
+    uses: ./.github/workflows/image.yaml
+    permissions:
+      contents: read
+      packages: read
+    with:
+      release: false
+
+  release:
+    name: Release
+    needs: [series, tests]
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/image.yaml
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    with:
+      release: true
+      patch: ${{ inputs.patch }}
+
+  # The only required check. `changes` is in needs on purpose: without it, a failure there skips
+  # the rest and skipped alone would read as green.
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    needs: [changes, title, lint, series, tests, image, release]
+    if: always()
+    steps:
+      - name: A job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
