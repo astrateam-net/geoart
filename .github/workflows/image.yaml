@@ -17,6 +17,13 @@ on:
         description: Our release slot, the N in 27.0.N
         required: false
         default: "0"
+    outputs:
+      version:
+        description: The version built, 27.0.N
+        value: ${{ jobs.prepare.outputs.version }}
+      digest:
+        description: The published manifest digest; empty unless release
+        value: ${{ jobs.merge.outputs.digest }}
 
 # No permissions here or on the jobs: they inherit the caller's grant, read-only for a pull
 # request and write for a release. A job asking for more than the caller grants fails the run at
@@ -29,6 +36,7 @@ jobs:
     outputs:
       platforms: ${{ steps.options.outputs.platforms }}
       release: ${{ steps.options.outputs.release }}
+      version: ${{ steps.options.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
