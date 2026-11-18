@@ -7,13 +7,14 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  # Releases are deliberate, as in orca-server: dispatch with the next patch to publish 27.0.N.
   workflow_dispatch:
     inputs:
-      release:
-        type: boolean
-        description: Push the image to ghcr.io
-        required: false
-        default: false
+      patch:
+        type: string
+        description: Our release slot, the N in 27.0.N. Bump it to re-release the same Dekart version.
+        required: true
+        default: "0"
 
 permissions:
   contents: read
@@ -91,7 +92,10 @@ jobs:
     name: Patch series integrity
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    # A dispatch releases, and paths-filter sees no change on it, so it runs the gates anyway.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -109,7 +113,10 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     needs: [changes, series]
-    if: needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
+    # A dispatch releases, and paths-filter sees no change on it, so it runs the gates anyway.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -127,13 +134,13 @@ jobs:
         run: mise exec -- npm ci --no-audit --no-fund
       - run: mise run test:unit
 
-  # Two callers, as the containers repo has: a pull request builds with read access only, main
-  # and a release dispatch push with write access.
+  # Two callers, as the containers repo has: pull requests and main build and test with read
+  # access only; a dispatch publishes with write access.
   image:
     name: Image
     needs: [changes, series]
     if: >-
-      github.event_name == 'pull_request' &&
+      github.event_name != 'workflow_dispatch' &&
       (needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true')
     uses: ./.github/workflows/image.yaml
     permissions:
@@ -144,11 +151,8 @@ jobs:
 
   release:
     name: Release
-    needs: [changes, series, tests]
-    if: >-
-      (github.event_name == 'push' &&
-      (needs.changes.outputs.series == 'true' || needs.changes.outputs.ci == 'true')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.release)
+    needs: [series, tests]
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/image.yaml
     permissions:
       attestations: write
@@ -157,6 +161,7 @@ jobs:
       packages: write
     with:
       release: true
+      patch: ${{ inputs.patch }}
 
   # The only required check. `changes` is in needs on purpose: without it, a failure there skips
   # the rest and skipped alone would read as green.

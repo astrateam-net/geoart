@@ -17,6 +17,15 @@ dekart_version() {
   jq -r .version lib/dekart/package.json
 }
 
+# Dekart 0.27.0 releases as 27.0.N, as orca-server drops Orca's major: the last slot is ours ($1),
+# so one upstream version can carry several releases of the series.
+# Not `git describe`: actions/checkout fetches submodules shallow and untagged.
+geoart_version() {
+  local version
+  version="$(dekart_version)"
+  echo "${version#*.}.${1:-0}"
+}
+
 # Upstream's toolchain, read from what its own build uses.
 dekart_go_version() {
   sed -n 's/^go //p' lib/dekart/go.mod

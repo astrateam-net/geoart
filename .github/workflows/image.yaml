@@ -12,6 +12,11 @@ on:
         type: boolean
         description: Push to ghcr.io and attest
         required: true
+      patch:
+        type: string
+        description: Our release slot, the N in 27.0.N
+        required: false
+        default: "0"
 
 # No permissions here or on the jobs: they inherit the caller's grant, read-only for a pull
 # request and write for a release. A job asking for more than the caller grants fails the run at
@@ -31,17 +36,24 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      # The upstream version we patch, read from the submodule: the containers repo reads it from
-      # a bake default instead.
+      # Version from the submodule plus our slot, as orca-server does; the containers repo reads a
+      # bake default instead. A release never overwrites a published tag: bump `patch`.
       - name: Application Options
         id: options
         env:
           RELEASE: ${{ inputs.release }}
+          PATCH: ${{ inputs.patch }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/geoart
         run: |
           source .mise/lib.sh
+          VERSION="$(geoart_version "$PATCH")"
+          if [ "$RELEASE" = true ] && docker buildx imagetools inspect "${IMAGE}:${VERSION}" > /dev/null 2>&1; then
+            echo "::error::${IMAGE}:${VERSION} is already published; dispatch again with the next patch"
+            exit 1
+          fi
           PLATFORMS=$(docker buildx bake image-all --print --progress=quiet | jq --raw-output --compact-output '.target."image-all".platforms')
           {
-            echo "version=$(dekart_version)"
+            echo "version=${VERSION}"
             echo "platforms=${PLATFORMS}"
             echo "release=${RELEASE}"
           } >> "$GITHUB_OUTPUT"
