@@ -25,6 +25,7 @@ The order is always `quilt push -a` → `mise run overlay` → build or test; `m
 | Who owns a file | `mise run owner <path>` |
 | Copy the overlay into another tree | `mise run overlay --into <root>` |
 | Series integrity (10 checks) | `mise run test:series` |
+| Tests the series and overlay carry (Go + vitest) | `mise run test:unit` — needs `npm ci` in `lib/dekart` |
 | Lint every file type | `mise run lint` |
 | Everything that gates a push | `mise run check` |
 | Build the image and run `tests.yaml` | `mise run build` — tags `geoart:<version>` |

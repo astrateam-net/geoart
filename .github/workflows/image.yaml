@@ -1,27 +1,19 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-# The containers repo's app-builder for one app: the image is built from the assembled tree, so
-# every build job applies the series and overlay first. Pull requests build and run tests.yaml;
-# main and a dispatch with `release` push ghcr.io/<owner>/geoart and attest it.
+# The containers repo's app-builder for one app, called by build.yaml: the image is built from the
+# assembled tree, so every build job applies the series and overlay first. Without `release` it
+# builds and runs tests.yaml; with it, it pushes ghcr.io/<owner>/geoart and attests it.
 name: Image
 
 on:
-  pull_request:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       release:
         type: boolean
-        description: Push to ghcr.io
-        required: false
-        default: false
+        description: Push to ghcr.io and attest
+        required: true
 
 permissions: {}
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   prepare:
@@ -43,15 +35,10 @@ jobs:
       - name: Application Options
         id: options
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          DISPATCH_RELEASE: ${{ inputs.release }}
+          RELEASE: ${{ inputs.release }}
         run: |
           source .mise/lib.sh
           PLATFORMS=$(docker buildx bake image-all --print --progress=quiet | jq --raw-output --compact-output '.target."image-all".platforms')
-          RELEASE=false
-          if [ "$EVENT_NAME" = push ] || [ "$DISPATCH_RELEASE" = true ]; then
-            RELEASE=true
-          fi
           {
             echo "version=$(geoart_version)"
             echo "platforms=${PLATFORMS}"
@@ -114,7 +101,8 @@ jobs:
       - name: Assemble Build Context
         run: mise run build:context
 
-      # Cache per arch; push by digest only on release, as the containers repo does.
+      # Cache per arch; push by digest only on release, as the containers repo does. The cache is
+      # geoart's own package: the containers repo's build_cache grants no write to other repos.
       - name: Get Bake Options
         id: target
         env:
@@ -122,7 +110,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           ARCH="${PLATFORM##*/}"
-          CACHE="ghcr.io/${OWNER}/build_cache:geoart-${ARCH}"
+          CACHE="ghcr.io/${OWNER}/geoart-build-cache:${ARCH}"
           {
             echo "arch=${ARCH}"
             echo "cache-from=type=registry,ref=${CACHE}"
