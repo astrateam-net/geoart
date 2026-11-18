@@ -61,6 +61,10 @@ Code in patches and overlay reads as if Vladi Bilonenko (`delfrrr`, author of ev
   `TestGetContextAmazonOIDC`, `httptest` for IdP endpoints, no network.
 - Proto: append enum values, `make proto`, never hand-edit generated files.
 
+Overlay JS and JSON follow `biome.jsonc`, not upstream's StandardJS: geoart is our build, not a
+fork for pull requests. Overlay Go follows `gofmt`. Both run through flint in `mise run lint` and
+the pre-commit hook; `lib/` and `patches/` are excluded.
+
 Commits here are conventional (`feat: …`, lowercase imperative, about 60 characters), enforced by hk.
 
 ## Invariants
