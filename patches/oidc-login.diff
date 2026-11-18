@@ -1,0 +1,170 @@
+Sign in with any OIDC provider inside Dekart, with server-side sessions
+
+`DEKART_REQUIRE_OIDC` trusts a JWT that a reverse proxy puts in
+`X-Forwarded-Access-Token` and never reads `Authorization`. Device tokens
+(`dekart init`, the GeoSQL MCP server) and snapshot tokens arrive as bearers, so
+they get 401, and the proxy in front refuses even `POST /api/v1/device` because
+the CLI carries no proxy cookie.
+
+`DEKART_REQUIRE_OIDC_LOGIN` makes Dekart the OIDC client: the authorization code
+flow with PKCE, state and nonce runs at `/api/v1/oidc/{login,callback,logout}`
+against endpoints from discovery, and the ID token is checked by the existing
+`oidcJWTVerifier`. The browser gets an opaque HttpOnly `dekart_session` cookie;
+the row in `oidc_sessions` stores its hash and the provider refresh token
+encrypted with `DEKART_OIDC_TOKEN_KEY`. When the provider access token expires
+the server refreshes it, and a refused refresh deletes the session, so a user
+disabled at the provider loses access. Bearers are tried first and never fall
+back to the cookie: snapshot, then device, as Amazon mode does.
+
+This patch carries the wiring only: config fields and their env reads, the mode
+in the `b2i` exclusion and `enabledSSOEnvVars()`, the `GetContext` branch, and
+the routes. The flow, the session store and the migration are overlay files.
+
+Covered by `oidclogin_test.go`.
+Index: b/lib/dekart/src/server/app/app.go
+===================================================================
+--- a/lib/dekart/src/server/app/app.go
++++ b/lib/dekart/src/server/app/app.go
+@@ -285,6 +285,13 @@ func configureHTTP(dekartServer *dekart.
+ 		dekartServer.HandleDeviceToken(w, r)
+ 	}).Methods("POST", "OPTIONS")
+ 
++	// Dekart owns the OIDC login, so the provider redirects straight back here.
++	if claimsCheck.RequireOIDCLogin {
++		api.HandleFunc("/oidc/login", claimsCheck.HandleOIDCLogin).Methods("GET")
++		api.HandleFunc("/oidc/callback", claimsCheck.HandleOIDCCallback).Methods("GET")
++		api.HandleFunc("/oidc/logout", claimsCheck.HandleOIDCLogout).Methods("POST")
++	}
++
+ 	if claimsCheck.RequireGoogleOAuth {
+ 		api.HandleFunc("/authenticate", func(w http.ResponseWriter, r *http.Request) {
+ 			setOriginHeader(w, r)
+@@ -351,6 +358,7 @@ func Configure(dekartServer *dekart.Serv
+ 		RequireSnowflakeContext: os.Getenv("DEKART_REQUIRE_SNOWFLAKE_CONTEXT") == "1",
+ 		RequireAmazonOIDC:       os.Getenv("DEKART_REQUIRE_AMAZON_OIDC") == "1",
+ 		RequireOIDC:             os.Getenv("DEKART_REQUIRE_OIDC") == "1",
++		RequireOIDCLogin:        os.Getenv("DEKART_REQUIRE_OIDC_LOGIN") == "1",
+ 		RequireGoogleOAuth:      os.Getenv("DEKART_REQUIRE_GOOGLE_OAUTH") == "1",
+ 		Region:                  os.Getenv("AWS_REGION"),
+ 		DevClaims:               os.Getenv("DEKART_DEV_CLAIMS") == "1",
+@@ -359,6 +367,10 @@ func Configure(dekartServer *dekart.Serv
+ 		OIDCJWKSURL:             os.Getenv("DEKART_OIDC_JWKS_URL"),
+ 		OIDCIssuer:              os.Getenv("DEKART_OIDC_ISSUER"),
+ 		OIDCAudience:            os.Getenv("DEKART_OIDC_AUDIENCE"),
++		OIDCClientID:            os.Getenv("DEKART_OIDC_CLIENT_ID"),
++		OIDCClientSecret:        os.Getenv("DEKART_OIDC_CLIENT_SECRET"),
++		OIDCScopes:              os.Getenv("DEKART_OIDC_SCOPES"),
++		OIDCTokenKey:            os.Getenv("DEKART_OIDC_TOKEN_KEY"),
+ 	}, db)
+ 
+ 	grpcServer := configureGRPC(dekartServer)
+Index: b/lib/dekart/src/server/app/licensecheck.go
+===================================================================
+--- a/lib/dekart/src/server/app/licensecheck.go
++++ b/lib/dekart/src/server/app/licensecheck.go
+@@ -29,10 +29,13 @@ func isSSOConfigured() bool {
+ 
+ // enabledSSOEnvVars returns SSO env vars that are currently enabled.
+ func enabledSSOEnvVars() []string {
+-	enabled := make([]string, 0, 4)
++	enabled := make([]string, 0, 5)
+ 	if os.Getenv("DEKART_REQUIRE_OIDC") == "1" {
+ 		enabled = append(enabled, "DEKART_REQUIRE_OIDC")
+ 	}
++	if os.Getenv("DEKART_REQUIRE_OIDC_LOGIN") == "1" {
++		enabled = append(enabled, "DEKART_REQUIRE_OIDC_LOGIN")
++	}
+ 	if os.Getenv("DEKART_REQUIRE_GOOGLE_OAUTH") == "1" {
+ 		enabled = append(enabled, "DEKART_REQUIRE_GOOGLE_OAUTH")
+ 	}
+Index: b/lib/dekart/src/server/app/licensecheck_test.go
+===================================================================
+--- a/lib/dekart/src/server/app/licensecheck_test.go
++++ b/lib/dekart/src/server/app/licensecheck_test.go
+@@ -13,6 +13,7 @@ func clearStartupLicenseEnv(t *testing.T
+ 	for _, key := range []string{
+ 		"DEKART_LICENSE_KEY",
+ 		"DEKART_REQUIRE_OIDC",
++		"DEKART_REQUIRE_OIDC_LOGIN",
+ 		"DEKART_REQUIRE_GOOGLE_OAUTH",
+ 		"DEKART_REQUIRE_IAP",
+ 		"DEKART_REQUIRE_AMAZON_OIDC",
+Index: b/lib/dekart/src/server/user/claims.go
+===================================================================
+--- a/lib/dekart/src/server/user/claims.go
++++ b/lib/dekart/src/server/user/claims.go
+@@ -52,6 +52,7 @@ type ClaimsCheckConfig struct {
+ 	RequireIAP              bool
+ 	RequireAmazonOIDC       bool
+ 	RequireOIDC             bool
++	RequireOIDCLogin        bool
+ 	RequireGoogleOAuth      bool
+ 	RequireSnowflakeContext bool
+ 	GoogleOAuthClientId     string
+@@ -61,6 +62,10 @@ type ClaimsCheckConfig struct {
+ 	OIDCJWKSURL             string
+ 	OIDCIssuer              string
+ 	OIDCAudience            string
++	OIDCClientID            string
++	OIDCClientSecret        string
++	OIDCScopes              string
++	OIDCTokenKey            string
+ }
+ 
+ // ClaimsCheck factory to add user claims to context
+@@ -69,6 +74,7 @@ type ClaimsCheck struct {
+ 	publicKeys *sync.Map
+ 	oidcJWT    *oidcJWTVerifier
+ 	db         *sql.DB
++	oidcLogin  *oidcLogin
+ }
+ 
+ const oauthCodeExchangeCacheTTL = 5 * time.Minute
+@@ -163,8 +169,8 @@ var oauthExchangeCache = newOAuthCodeExc
+ var b2i = map[bool]int{false: 0, true: 1}
+ 
+ func validateConfig(c ClaimsCheckConfig) {
+-	if b2i[c.RequireIAP]+b2i[c.RequireAmazonOIDC]+b2i[c.RequireOIDC]+b2i[c.RequireGoogleOAuth]+b2i[c.RequireSnowflakeContext] > 1 {
+-		log.Fatal().Msg("DEKART_REQUIRE_IAP, DEKART_REQUIRE_AMAZON_OIDC, DEKART_REQUIRE_OIDC, DEKART_REQUIRE_GOOGLE_OAUTH and DEKART_REQUIRE_SNOWFLAKE_CONTEXT are mutually exclusive")
++	if b2i[c.RequireIAP]+b2i[c.RequireAmazonOIDC]+b2i[c.RequireOIDC]+b2i[c.RequireOIDCLogin]+b2i[c.RequireGoogleOAuth]+b2i[c.RequireSnowflakeContext] > 1 {
++		log.Fatal().Msg("DEKART_REQUIRE_IAP, DEKART_REQUIRE_AMAZON_OIDC, DEKART_REQUIRE_OIDC, DEKART_REQUIRE_OIDC_LOGIN, DEKART_REQUIRE_GOOGLE_OAUTH and DEKART_REQUIRE_SNOWFLAKE_CONTEXT are mutually exclusive")
+ 	}
+ 	switch {
+ 	case c.RequireSnowflakeContext:
+@@ -174,6 +180,9 @@ func validateConfig(c ClaimsCheckConfig)
+ 		if c.OIDCJWKSURL == "" {
+ 			log.Fatal().Msgf("DEKART_OIDC_JWKS_URL is required for OIDC JWT header auth")
+ 		}
++	case c.RequireOIDCLogin:
++		log.Info().Msgf("Dekart configured to require OIDC login")
++		validateOIDCLoginConfig(c)
+ 	case c.RequireIAP:
+ 		log.Info().Msgf("Dekart configured to require IAP")
+ 	case c.RequireAmazonOIDC:
+@@ -204,11 +213,16 @@ func NewClaimsCheck(c ClaimsCheckConfig,
+ 	if c.RequireOIDC {
+ 		oidcJWT = newOIDCJWTVerifier(c)
+ 	}
++	var login *oidcLogin
++	if c.RequireOIDCLogin {
++		login = newOIDCLogin(c, db)
++	}
+ 	return ClaimsCheck{
+ 		c,
+ 		&sync.Map{},
+ 		oidcJWT,
+ 		db,
++		login,
+ 	}
+ }
+ 
+@@ -304,6 +318,9 @@ func (c ClaimsCheck) GetContext(r *http.
+ 		claims = validateSnapshotReport(claims, reportID)
+ 	} else if claims == nil && c.RequireOIDC {
+ 		claims = c.validateJWTFromOIDCHeader(r)
++	} else if claims == nil && c.RequireOIDCLogin {
++		claims = c.oidcLoginClaims(r)
++		claims = validateSnapshotReport(claims, reportID)
+ 	} else if claims == nil && c.RequireGoogleOAuth {
+ 		authHeader := r.Header.Get("Authorization")
+ 		loggedIn := strings.TrimSpace(r.Header.Get("X-Dekart-Logged-In"))

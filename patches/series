@@ -5,3 +5,4 @@
 # else; there is no such operation as "renumbering".
 #
 # `quilt push -a` applies these top to bottom onto the pinned lib/dekart submodule.
+oidc-login.diff
